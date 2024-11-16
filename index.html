@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather App</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+
+    <div class="background"></div>
+<div class="card">
+    <div class="search">
+        <input type="text" placeholder="Enter city name" spellcheck="false">
+        <button><img src="images/search.png"></button>
+    </div>
+    <div class="error">
+        <p>Invalid city name</p>
+    </div>
+
+    <div class="Weather">
+        <img src="images/rain.png" class="weather-icon">
+        <h1 class="temp">22°C</h1>
+        <h2 class="city">New York</h2>
+        <h3 class="date"></h3>
+        <h4 class="time"></h4> <!-- Added for time display -->
+
+        <div class="details">
+            <div class="col">
+                <img src="images/humidity.png">
+                <div>
+                    <p class="humidity">50%</p>
+                    <p>Humidity</p>
+                </div>
+            </div>
+            <div class="col">
+                <img src="images/wind.png">
+                <div>
+                    <p class="wind">15 km/hr</p>
+                    <p>Wind Speed</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="forecast-container"></div>
+
+</div>
+<div class="chart-container">
+    <h3>Rain/Storm Frequency</h3>
+    <canvas id="rainChart"></canvas>
+</div>
+
+<script>
+    const ApiKey = "430fe3d66c825725ca167635469b6edd"; // Consider hiding this
+    const ApiUrl = "https://api.openweathermap.org/data/2.5/weather?units=metric&q=";
+
+    const UNSPLASH_API_KEY = "r0A9ulCJvJmTlrCajwLJ3xFh-s4xtv1AazqUo8DOqRE"; // Unsplash API Access Key
+    const UNSPLASH_URL = "https://api.unsplash.com/photos/random?query=";
+
+
+    const searchBox = document.querySelector(".search input");
+    const searchBtn = document.querySelector(".search button");
+    const weatherIcon = document.querySelector(".weather-icon");
+
+    async function fetchCityImage(city) {
+            try {
+                const response = await fetch(`${UNSPLASH_URL}${city}&client_id=${UNSPLASH_API_KEY}&orientation=landscape`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const imageUrl = data.urls.regular;
+                    document.querySelector(".background").style.backgroundImage = `url(${imageUrl})`;
+                } else {
+                    console.error("Error fetching image:", response.statusText);
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        }
+
+    function displayDate() {
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const dateString = now.toLocaleDateString('en-US', options);
+        document.querySelector('.date').innerHTML = dateString;
+    }
+
+    function displayTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.querySelector('.time').innerHTML = timeString; 
+    }
+
+    async function fetchWeather(city) {
+        if (!city) {
+            document.querySelector(".error").innerText = "Please enter a city name.";
+            document.querySelector(".error").style.display = "block";
+            return; // Exit the function early
+        }
+
+        const response = await fetch(ApiUrl + city + `&appid=${ApiKey}`);
+        if (response.ok) { // Check if the response status is 2xx
+            const data = await response.json();
+            console.log(data);
+
+            document.querySelector(".city").innerHTML = data.name;
+            document.querySelector(".temp").innerHTML = Math.round(data.main.temp) + "°C";
+            document.querySelector(".humidity").innerHTML = data.main.humidity + "%";
+            document.querySelector(".wind").innerHTML = data.wind.speed + " km/hr";
+
+            displayDate();
+            displayTime(); 
+
+            // Weather conditions
+            const weatherCondition = data.weather[0].main;
+            weatherIcon.src = `images/${weatherCondition.toLowerCase()}.png`; // Simplified image path assignment
+
+            document.querySelector(".Weather").style.display = "block";
+            document.querySelector(".error").style.display = "none"; // Hide error message
+        } else {
+            document.querySelector(".error").innerText = "Could not fetch weather data. Please try again later.";
+            document.querySelector(".error").style.display = "block";
+            document.querySelector(".Weather").style.display = "none"; // Hide weather info
+        }
+    }
+    const forecastUrl = "https://api.openweathermap.org/data/2.5/forecast?units=metric&q=";
+
+async function fetchForecast(city) {
+    if (!city) return;
+
+    const response = await fetch(forecastUrl + city + `&appid=${ApiKey}`);
+    if (response.ok) {
+        const data = await response.json();
+        displayForecast(data);
+    } else {
+        console.error("Could not fetch forecast data.");
+    }
+}
+
+function displayForecast(data) {
+    const forecastContainer = document.querySelector(".forecast-container");
+    forecastContainer.innerHTML = ""; // Clear previous forecast
+
+    // Loop through the data to get one forecast per day (at midday or another preferred time)
+    for (let i = 0; i < data.list.length; i += 8) {
+        const forecast = data.list[i];
+        const date = new Date(forecast.dt_txt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const temp = Math.round(forecast.main.temp);
+        const weatherDesc = forecast.weather[0].description;
+        const icon = forecast.weather[0].icon;
+
+
+        const forecastCard = `
+            <div class="forecast-card">
+                <p class="forecast-date">${date}</p>
+                <img src="http://openweathermap.org/img/wn/${icon}.png" alt="${weatherDesc}" class="forecast-icon">
+                <p class="forecast-temp">${temp}°C</p>
+                <p class="forecast-desc">${weatherDesc}</p>
+            </div>
+        `;
+        forecastContainer.innerHTML += forecastCard;
+    }
+}
+
+// Fetch forecast data and generate rain/storm chart
+async function fetchForecastForChart(city) {
+        if (!city) return;
+
+        const response = await fetch(forecastUrl + city + `&appid=${ApiKey}`);
+        if (response.ok) {
+            const data = await response.json();
+            generateRainChart(data);
+        } else {
+            document.querySelector(".error").innerText = "Could not fetch forecast data for chart.";
+            document.querySelector(".error").style.display = "block";
+        }
+    }
+     // Generate chart based on rain/storm occurrences
+     function generateRainChart(data) {
+        const dates = [];
+        const rainCounts = [];
+
+        data.list.forEach((forecast) => {
+            const date = new Date(forecast.dt_txt).toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric'
+            });
+
+            if (!dates.includes(date)) {
+                dates.push(date);
+                rainCounts.push(0);
+            }
+
+            const description = forecast.weather[0].main.toLowerCase();
+            if (description.includes("rain") || description.includes("storm")) {
+                rainCounts[dates.indexOf(date)]++;
+            }
+        });
+        const ctx = document.getElementById('rainChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: 'Rain/Storm Occurrences',
+                    data: rainCounts,
+                    backgroundColor: 'cyan',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+            
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Occurrences'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+searchBtn.addEventListener("click", () => {
+    const city = searchBox.value.trim();
+    fetchWeather(city);
+    fetchForecast(city); // Fetch 5-day forecast
+    fetchForecastForChart(city);
+    fetchCityImage(city);
+  
+});
+
+    // Optional: Update time every minute
+    setInterval(displayTime, 60000);
+    displayTime(); // Call initially
+</script>
+
+</body>
+</html>
